@@ -15,9 +15,9 @@ from scipy.interpolate import RegularGridInterpolator
 
 
 # Location of all data files. CHANGE THIS FOR DARKHISTORY TO ALWAYS
-# LOOK FOR THESE DATA FILES HERE. 
+# LOOK FOR THESE DATA FILES HERE.
 
-data_path = '/foo/bar'
+data_path = '/Users/boris/Documents/GitHub/DarkHistory/data/dataverse_files/'
 
 # Global variables for data.
 glob_binning_data = None
@@ -28,7 +28,7 @@ glob_hist_data    = None
 glob_pppc_data    = None
 glob_f_data       = None
 
-class PchipInterpolator2D: 
+class PchipInterpolator2D:
 
     """ 2D interpolation over PPPC4DMID raw data, using the PCHIP method.
 
@@ -36,7 +36,7 @@ class PchipInterpolator2D:
     -----------
     coords_data : ndarray, size (M,N)
 
-        
+
     values_data : ndarray
     pri : string
         Specifies primary annihilation channel. See :func:`.get_pppc_spec` for the full list.
@@ -50,14 +50,14 @@ class PchipInterpolator2D:
     sec : {'elec', 'phot'}
         Specifies which secondary spectrum to obtain (electrons/positrons or photons).
     get_val : function
-        Returns the interpolation value at (coord, value) based 
+        Returns the interpolation value at (coord, value) based
 
     Notes
     -------
-    PCHIP stands for piecewise cubic hermite interpolating polynomial. This class was built to mimic the Mathematica interpolation of the PPPC4DMID data. 
+    PCHIP stands for piecewise cubic hermite interpolating polynomial. This class was built to mimic the Mathematica interpolation of the PPPC4DMID data.
 
     """
-    
+
     def __init__(self, coords_data, values_data, pri, sec):
         if sec == 'elec':
             i = 0
@@ -69,7 +69,7 @@ class PchipInterpolator2D:
             fac = 1.
         else:
             raise TypeError('invalid final state.')
-            
+
         self.pri = pri
         self.sec = sec
 
@@ -77,7 +77,7 @@ class PchipInterpolator2D:
         # We do the same thing for 'mu', 'tau', 'W' and 'Z'.
         # To avoid thinking too much, all spectra are split into two parts.
         # self._weight gives the weight of each half.
-            
+
         if pri == 'e' or pri == 'mu' or pri == 'tau':
             pri_1 = pri + '_L'
             pri_2 = pri + '_R'
@@ -95,12 +95,12 @@ class PchipInterpolator2D:
         idx_list_data = {
             'e_L': 0, 'e_R': 1, 'mu_L': 2, 'mu_R': 3, 'tau_L': 4, 'tau_R': 5,
             'q': 6, 'c': 7, 'b': 8, 't': 9,
-            'W_L': 10, 'W_T': 11, 'Z_L': 12, 'Z_T': 13, 
+            'W_L': 10, 'W_T': 11, 'Z_L': 12, 'Z_T': 13,
             'g': 14, 'gamma': 15, 'h': 16,
             'nu_e': 17, 'nu_mu': 18, 'nu_tau': 19,
             'VV_to_4e': 20, 'VV_to_4mu': 21, 'VV_to_4tau': 22
-        } 
-        
+        }
+
         # Compile the raw data.
         mDM_in_GeV_arr_1 = np.array(
             coords_data[i, idx_list_data[pri_1], 0]
@@ -118,14 +118,14 @@ class PchipInterpolator2D:
         )
         values_arr_2     = np.array(values_data[i, idx_list_data[pri_2]])
 
-        self._mDM_in_GeV_arrs = [mDM_in_GeV_arr_1, mDM_in_GeV_arr_2] 
+        self._mDM_in_GeV_arrs = [mDM_in_GeV_arr_1, mDM_in_GeV_arr_2]
         self._log10x_arrs     = [log10x_arr_1,     log10x_arr_2]
 
-        # Save the 1D PCHIP interpolator over mDM_in_GeV. Multiply the 
-        # electron spectrum by 2 by adding np.log10(2).  
+        # Save the 1D PCHIP interpolator over mDM_in_GeV. Multiply the
+        # electron spectrum by 2 by adding np.log10(2).
         self._interpolators = [
             PchipInterpolator(
-                mDM_in_GeV_arr_1, values_arr_1 + np.log10(fac), 
+                mDM_in_GeV_arr_1, values_arr_1 + np.log10(fac),
                 extrapolate=False
             ),
             PchipInterpolator(
@@ -133,53 +133,53 @@ class PchipInterpolator2D:
                 extrapolate=False
             )
         ]
-    
+
     def get_val(self, mDM_in_GeV, log10x):
-        
+
         if (
-            mDM_in_GeV < self._mDM_in_GeV_arrs[0][0] 
+            mDM_in_GeV < self._mDM_in_GeV_arrs[0][0]
             or mDM_in_GeV < self._mDM_in_GeV_arrs[1][0]
             or mDM_in_GeV > self._mDM_in_GeV_arrs[0][-1]
             or mDM_in_GeV > self._mDM_in_GeV_arrs[1][-1]
         ):
             raise TypeError('mDM lies outside of the interpolation range.')
-        
-        # Call the saved interpolator at mDM_in_GeV, 
-        # then use PCHIP 1D interpolation at log10x. 
+
+        # Call the saved interpolator at mDM_in_GeV,
+        # then use PCHIP 1D interpolation at log10x.
         result1 = pchip_interpolate(
             self._log10x_arrs[0], self._interpolators[0](mDM_in_GeV), log10x
         )
-        # Set all values outside of the log10x interpolation range to 
-        # (effectively) zero. 
+        # Set all values outside of the log10x interpolation range to
+        # (effectively) zero.
         result1[log10x >= self._log10x_arrs[0][-1]] = -100.
         result1[log10x <= self._log10x_arrs[0][0]]  = -100.
-        
+
         result2 = pchip_interpolate(
             self._log10x_arrs[1], self._interpolators[1](mDM_in_GeV), log10x
         )
         result2[log10x >= self._log10x_arrs[1][-1]] = -100.
         result2[log10x <= self._log10x_arrs[1][0]]  = -100.
-        
-        # Combine the two spectra.  
+
+        # Combine the two spectra.
         return np.log10(
             self._weight[0]*10**result1 + self._weight[1]*10**result2
         )
 
 def load_data(data_type):
-    """ Loads data from downloaded files. 
+    """ Loads data from downloaded files.
 
     Parameters
     ----------
     data_type : {'binning', 'dep_tf', 'ics_tf', 'struct', 'hist', 'f', 'pppc'}
-        Type of data to load. The options are: 
+        Type of data to load. The options are:
 
         - *'binning'* -- Default binning for all transfer functions;
 
         - *'dep_tf'* -- Transfer functions for propagating photons and deposition into low-energy photons, low-energy electrons, high-energy deposition and upscattered CMB energy rate;
 
-        - *'ics_tf'* -- Transfer functions for ICS for scattered photons in the Thomson regime, relativistic regime, and scattered electron energy-loss spectrum; 
+        - *'ics_tf'* -- Transfer functions for ICS for scattered photons in the Thomson regime, relativistic regime, and scattered electron energy-loss spectrum;
 
-        - *'struct'* -- Structure formation boosts; 
+        - *'struct'* -- Structure formation boosts;
 
         - *'hist'* -- Baseline ionization and temperature histories;
 
@@ -191,7 +191,7 @@ def load_data(data_type):
     Returns
     --------
     dict
-        A dictionary of the data requested. 
+        A dictionary of the data requested.
 
     See Also
     ---------
@@ -200,7 +200,7 @@ def load_data(data_type):
     """
 
     global data_path
-    
+
     global glob_binning_data, glob_dep_tf_data, glob_ics_tf_data
     global glob_struct_data,  glob_hist_data, glob_f_data, glob_pppc_data
 
@@ -318,7 +318,7 @@ def load_data(data_type):
                 'einasto_subs'    : boost_data[:,[0,1]],
                 'einasto_no_subs' : boost_data[:,[0,2]],
                 'NFW_subs'        : boost_data[:,[0,3]],
-                'NFW_no_subs'     : boost_data[:,[0,4]] 
+                'NFW_no_subs'     : boost_data[:,[0,4]]
             }
 
         return glob_struct_data
@@ -385,29 +385,29 @@ def load_data(data_type):
                 data_path+'/dlNdlxIEW_values_table.txt'
             )
 
-            with open(coords_file_name) as data_file:    
+            with open(coords_file_name) as data_file:
                 coords_data = np.array(json.load(data_file))
             with open(values_file_name) as data_file:
                 values_data = np.array(json.load(data_file))
 
-            # coords_data is a (2, 23, 2) array. 
+            # coords_data is a (2, 23, 2) array.
             # axis 0: stable SM secondaries, {'elec', 'phot'}
             # axis 1: annihilation primary channel.
-            # axis 2: {mDM in GeV, np.log10(K/mDM)}, K is the energy of 
-            # the secondary. 
+            # axis 2: {mDM in GeV, np.log10(K/mDM)}, K is the energy of
+            # the secondary.
             # Each element is a 1D array.
 
-            # values_data is a (2, 23) array, d log_10 N / d log_10 (K/mDM). 
+            # values_data is a (2, 23) array, d log_10 N / d log_10 (K/mDM).
             # axis 0: stable SM secondaries, {'elec', 'phot'}
             # axis 1: annihilation primary channel.
             # Each element is a 2D array indexed by {mDM in GeV, np.log10(K/mDM)}
-            # as saved in coords_data. 
+            # as saved in coords_data.
 
             # Compile a dictionary of all of the interpolators.
             dlNdlxIEW_interp = {'elec':{}, 'phot':{}}
 
             chan_list = [
-                'e_L','e_R', 'e', 'mu_L', 'mu_R', 'mu', 
+                'e_L','e_R', 'e', 'mu_L', 'mu_R', 'mu',
                 'tau_L', 'tau_R', 'tau',
                 'q',  'c',  'b', 't',
                 'W_L', 'W_T', 'W', 'Z_L', 'Z_T', 'Z', 'g',  'gamma', 'h',
@@ -430,5 +430,3 @@ def load_data(data_type):
     else:
 
         raise ValueError('invalid data_type.')
-
-
